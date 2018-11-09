@@ -1,9 +1,74 @@
-﻿天地有正气，杂然赋流形。下则为河岳，上则为日星。于人曰浩然，沛乎塞苍冥。
-皇路当清夷，含和吐明庭。时穷节乃见，一一垂丹青。在齐太史简，在晋董狐笔。
-在秦张良椎，在汉苏武节。为严将军头，为嵇侍中血。为张睢阳齿，为颜常山舌。
-或为辽东帽，清操厉冰雪。或为出师表，鬼神泣壮烈。或为渡江楫，慷慨吞胡羯。
-或为击贼笏，逆竖头破裂。是气所磅礴，凛烈万古存。当其贯日月，生死安足论。
-地维赖以立，天柱赖以尊。三纲实系命，道义为之根。嗟予遘阳九，隶也实不力。
-楚囚缨其冠，传车送穷北。鼎镬甘如饴，求之不可得。阴房阗鬼火，春院闭天黑。
-牛骥同一皂，鸡栖凤凰食。一朝蒙雾露，分作沟中瘠。如此再寒暑，百疠自辟易。
-哀哉沮洳场，为我安乐国。岂有他缪巧，阴阳不能贼。顾此耿耿存，仰视浮云白。
+## The eNodeB Process
+
+On this study we focus on the eNodeB process of OpenAirInterface, but there are other three main components: The Evolved Packet Core（）演进分组核心, The UE and The RRH (when fronthaul is used)
+
+The main file of eNodeB application is the lte_softmodem.c this process starts six threads（线程）, the following list shows where these threads are defined and started, along with the purpose of each thread.以下的表单展示了这些线程是在哪里定义哪里开始的以及每个线程的目的是什么
+
+* **eNB_thread**: defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1770), started [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L3750)
+	* Thread to send/receive data to/from RF frontend 用于向RF前端发送数据或者从RF前端接受数据，RF：radio frequence 射频
+* **eNB_thread_tx**: defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1064), started [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1641)
+	* Thread to generate the downlink signal for RF frontend（用于为RF前端生成下行信号的线程）
+	* By default 10 threads of this type are generated.（默认情况下会生成10个此类型的线程）
+* **eNB_thread_rx**: defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1367), started [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1642)
+	* Thread to process the Uplink acquired from RF frontend（用于处理从RF前端获得的上行链路的数据）
+	* By default 10 threads of this type are generated.（默认情况下会生成10个此类型的线程）
+* **scope_thread**: defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L550), started [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L3666)
+	* Thread to update the information shown in the scope (enabled with -d in the command line argument)（用于更新scope中的显示信息（在命令行参数使用-d启用））
+* **emos_thread**: defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L719), started [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L3677)
+	* The EMOS (Eurecom MIMO Openair Sounder) allows multi-user MIMO channel measurements in real time （EMOS（Eurecom MIMO Openair Sounder）可实时进行多用户MIMO信道测量）
+	* At this commit the EMOS functions may by unstable,此处的EMOS函数可能不稳定
+	* More at [eurecon wiki](https://twiki.eurecom.fr/twiki/bin/view/OpenAirInterface/EurecomMimoOpenairSounder)
+* **gps_thread**: defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L649), started [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L3679)
+	* GPS synchronization reference used at EMOS（EMOS使用的GPS同步参考）
+
+Since in this study we are interested in the LTE signal, just the second and third threads are focused, the following list shows an overview of the operations done in both eNB_thread_tx and eNB_thread_rx.
+（由于在本研究中我们对LTE信号感兴趣，因此仅关注第二和第三线程，以下列表显示了在eNB_thread_tx和eNB_thread_rx中完成的操作的概述。）
+* **eNB_thread_tx**
+	1. Configure the thread affinity if the CPU have more than 2 processors（如果CPU具有多于2个处理器，请配置线程关联）
+	2. Configure Scheduling priority（配置调度优先级）
+	3. Infinity Loop:（无限循环）
+		1. Block and/or wait on Mutexes（阻止和/或等待互斥锁）
+		2. Call **phy_procedures_eNB_TX()** to generate LTE data.（调用** phy_procedures_eNB_TX（）**以生成LTE数据。）
+		3. Call **do_OFDM_mod_rt()** to modulate LTE signal.（调用** do_OFDM_mod_rt（）**来调制LTE信号。）
+		4. Unlock Mutexes（） （解锁互斥锁）
+互斥锁：
+　　当一个全局的共有资源被多个线程同时调用会出现意想不到的问题，比如你去银行取出所有钱，同时又转所有钱到支付宝，如果这两块同时执行，就有可能转出双倍的钱，这是不允许的。
+这时候要使用的这个线程需要将这个资源（取钱这个过程）先“锁”起来，然后用好之后再解锁，这期间别的线程就无法使用了，其他线程的也是类似的过程。
+互斥锁是通过锁的机制来实现线程间的同步问题。互斥锁的基本流程为：
+
+初始化一个互斥锁：pthread_mutex_init()函数
+加锁：pthread_mutex_lock()函数或者pthread_mutex_trylock()函数
+对共享资源的操作
+解锁：pthread_mutex_unlock()函数
+注销互斥锁：pthread_mutex_destory()函数
+
+其中，在加锁过程中，pthread_mutex_lock()函数和pthread_mutex_trylock()函数的过程略有不同：
+当使用pthread_mutex_lock()函数进行加锁时，若此时已经被锁，则尝试加锁的线程会被阻塞，直到互斥锁被其他线程释放，当pthread_mutex_lock()函数有返回值时，说明加锁成功；
+而使用pthread_mutex_trylock()函数进行加锁时，若此时已经被锁，则会返回EBUSY的错误码。同时，解锁的过程中，也需要满足两个条件：解锁前，互斥锁必须处于锁定状态；必须由加锁的线程进行解锁。当互斥锁使用完成后，必须进行清除。
+
+
+* **eNB_thread_rx**
+	1. Configure the thread affinity if the CPU have more than 2 processors（如果CPU具有多于2个处理器，请配置线程关联）
+	2. Configure Scheduling priority（配置调度优先级）
+	3. Infinity Loop:（无限循环）
+		1. Block and/or wait on Mutexes（阻止和/或等待互斥锁）
+		2. If (TDD and subframe_rx == SF_UL) or (FDD):
+			1. Call **phy_procedures_eNB_RX()** to generate LTE data.（调用** phy_procedures_eNB_RX（）**以生成LTE数据。）
+		3. If subframe_rx == SF_S
+			1. Call **phy_procedures_eNB_S_RX()** to demodulate LTE signal.（调用**phy_procedures_eNB_S_RX()**来解调LTE信号
+		4. Unlock Mutexes（解锁互斥锁）
+
+
+**OBS:** The thread affinity configured in both threads follows the rule:
+* CPU 0 is reserved for UHD threads
+* CPU 1 is reserved for TX threads
+* CPU 2 ... MAX_CPUS are reserved for RX threads.
+
+From both threads we divide the functions in Downlink and Uplink as shown in the following list:
+
+* Downlink:
+	* **phy_procedures_eNB_TX()** defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/openair1/SCHED/phy_procedures_lte_eNb.c#L517), used [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1255)
+	* **do_OFDM_mod_rt()** defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L947), used [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1273)
+* Uplink
+	* **phy_procedures_eNB_RX()** defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/openair1/SCHED/phy_procedures_lte_eNb.c#L2671), used [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1541)
+	* **phy_procedures_eNB_S_RX()** defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/openair1/SCHED/phy_procedures_lte_eNb.c#L293), used [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1545)
