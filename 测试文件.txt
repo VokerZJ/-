@@ -59,13 +59,13 @@ Since in this study we are interested in the LTE signal, just the second and thi
 		4. Unlock Mutexes（解锁互斥锁）
 
 
-**OBS:** The thread affinity configured in both threads follows the rule:
-* CPU 0 is reserved for UHD threads
-* CPU 1 is reserved for TX threads
-* CPU 2 ... MAX_CPUS are reserved for RX threads.
+**OBS:** The thread affinity configured in both threads follows the rule:（两个线程中配置的线程关联遵循以下规则：）
+* CPU 0 is reserved for UHD threads  CPU 0保留给UHD线程
+* CPU 1 is reserved for TX threads    CPU 1保留用于TX线程
+* CPU 2 ... MAX_CPUS are reserved for RX threads.CPU 2 ... MAX_CPUS保留用于RX线程。
 
 From both threads we divide the functions in Downlink and Uplink as shown in the following list:
-
+我们从两个线程中将函数根据上行和下行进行划分，如下所示
 * Downlink:
 	* **phy_procedures_eNB_TX()** defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/openair1/SCHED/phy_procedures_lte_eNb.c#L517), used [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1255)
 	* **do_OFDM_mod_rt()** defined [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L947), used [here](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/v0.5.2/targets/RT/USER/lte-softmodem.c#L1273)
